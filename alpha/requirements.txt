@@ -1,0 +1,2 @@
+lightgbm
+# (pandas, numpy, scipy, matplotlib, yfinance come from hub/requirements.txt)
