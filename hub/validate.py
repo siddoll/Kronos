@@ -2,11 +2,15 @@ import numpy as np
 from .signals import SIGNALS
 from .rank import score_ticker, rank_candidates
 
+_EMPTY = {"n": 0, "topk_fwd_return": 0.0, "universe_fwd_return": 0.0,
+          "edge": 0.0, "hit_rate": 0.0}
+
 def backtest_screen(frames: dict, cfg, horizon: int = 10, step: int = 5) -> dict:
+    if not frames:  # all fetches failed / empty universe
+        return dict(_EMPTY)
     lookback = cfg.lookback_days
     topk_rets, univ_rets, hits = [], [], []
-    any_symbol = next(iter(frames.values()))
-    n_bars = len(any_symbol)
+    n_bars = max(len(df) for df in frames.values())  # cover the longest frame
     for origin in range(lookback, n_bars - horizon, step):
         scored, fwd = {}, {}
         for sym, df in frames.items():
@@ -26,8 +30,7 @@ def backtest_screen(frames: dict, cfg, horizon: int = 10, step: int = 5) -> dict
         univ_rets.append(np.mean(list(fwd.values())))
         hits.append(np.mean([fwd[s] > 0 for s in top]))
     if not topk_rets:
-        return {"n": 0, "topk_fwd_return": 0.0, "universe_fwd_return": 0.0,
-                "edge": 0.0, "hit_rate": 0.0}
+        return dict(_EMPTY)
     tk, uv = float(np.mean(topk_rets)), float(np.mean(univ_rets))
     return {"n": len(topk_rets), "topk_fwd_return": tk, "universe_fwd_return": uv,
             "edge": tk - uv, "hit_rate": float(np.mean(hits))}
