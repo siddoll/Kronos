@@ -1,0 +1,38 @@
+import pandas as pd
+from hub.data.provider import OpenBBProvider, _FUND_KEYS
+
+class _FundamentalNS:
+    def __init__(self, df, raise_it=False):
+        self._df, self._raise = df, raise_it
+    def metrics(self, symbol, provider=None):
+        if self._raise:
+            raise RuntimeError("api down")
+        return self._df
+
+class _EquityNS:
+    def __init__(self, df, raise_it=False):
+        self.fundamental = _FundamentalNS(df, raise_it)
+
+class FakeObb:
+    """Minimal obb stand-in: obb.equity.fundamental.metrics(...)."""
+    def __init__(self, metrics_df=None, raise_it=False):
+        self.equity = _EquityNS(metrics_df, raise_it)
+
+def test_fundamentals_normalized():
+    df = pd.DataFrame([{"pe_ratio": 30.5, "earnings_growth": 0.12, "market_cap": 3.1e12}])
+    out = OpenBBProvider(obb=FakeObb(df)).get_fundamentals("AAPL")
+    assert set(out) == set(_FUND_KEYS)
+    assert out["pe_ratio"] == 30.5 and out["earnings_growth"] == 0.12
+    assert out["forward_pe"] is None  # absent column -> None
+
+def test_fundamentals_error_is_all_none():
+    out = OpenBBProvider(obb=FakeObb(raise_it=True)).get_fundamentals("AAPL")
+    assert all(v is None for v in out.values()) and set(out) == set(_FUND_KEYS)
+
+def test_fundamentals_uses_cache(tmp_path):
+    from hub.data.kvcache import KVCache
+    df = pd.DataFrame([{"pe_ratio": 10.0}])
+    kv = KVCache(str(tmp_path))
+    p = OpenBBProvider(obb=FakeObb(df), kv=kv)
+    p.get_fundamentals("AAA")
+    assert kv.get("fund_AAA")["pe_ratio"] == 10.0  # written to cache
