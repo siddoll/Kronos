@@ -23,10 +23,14 @@ class CachedProvider:
 class YFinanceProvider:
     def get_ohlcv(self, symbol, lookback_days):
         import yfinance as yf
-        h = yf.Ticker(symbol).history(period=f"{lookback_days}d", interval="1d")
+        # lookback_days is a TRADING-BAR count (used as bar index in signals/backtest).
+        # yfinance period="Nd" is CALENDAR days (~0.69 trading bars each), so fetch a
+        # generous calendar window then tail to the requested number of bars.
+        cal_days = int(lookback_days * 1.7) + 60
+        h = yf.Ticker(symbol).history(period=f"{cal_days}d", interval="1d")
         h = h.rename(columns=str.lower)[["open","high","low","close","volume"]].astype(float)
         h.index = pd.to_datetime(h.index).tz_localize(None)
-        return h.dropna()
+        return h.dropna().tail(lookback_days)
     def get_news(self, symbol, limit=5):
         import yfinance as yf
         out = []

@@ -45,11 +45,15 @@ def main(argv) -> int:
         cfg = HubConfig.default()
         if args.universe:
             cfg = HubConfig(**{**cfg.__dict__, "universe": args.universe})
-        provider = get_default_provider(cfg.cache_dir)
+        # Separate cache dir: backtest needs more bars (lookback+horizon+) than a
+        # scan caches, and the OHLCV cache is keyed by symbol only — sharing it
+        # would shadow the longer fetch with a shorter scan frame.
+        provider = get_default_provider(cfg.cache_dir + "_bt")
+        need = cfg.lookback_days + args.horizon + 60
         frames = {}
         for sym in load_universe(cfg.universe):
             try:
-                frames[sym] = provider.get_ohlcv(sym, cfg.lookback_days + 60)
+                frames[sym] = provider.get_ohlcv(sym, need)
             except Exception:
                 pass
         m = backtest_screen(frames, cfg, horizon=args.horizon)
