@@ -7,3 +7,4 @@ pyarrow
 openbb
 pandas-ta
 streamlit
+edgartools
