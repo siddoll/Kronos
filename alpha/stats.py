@@ -3,9 +3,12 @@ from scipy.stats import norm
 
 
 def prob_sharpe_ratio(sr, T, skew=0.0, kurt=3.0, sr_benchmark=0.0) -> float:
-    # Bailey-Lopez de Prado PSR; kurt is raw (non-excess), so excess = kurt - 3.
-    # denom uses excess kurtosis so that N(0,1) returns (skew=0, kurt=3) give denom=1
-    # and PSR reduces to Phi(sr * sqrt(T-1)) in the normal case.
+    # Probabilistic Sharpe Ratio. `kurt` is raw (non-excess), excess = kurt - 3.
+    # The denominator uses the Lo (2002) / Mertens (2002) Sharpe standard-error form
+    # with EXCESS kurtosis, so a normal return stream (skew=0, kurt=3) gives denom=1
+    # and PSR reduces to Phi(sr * sqrt(T-1)). (Bailey & Lopez de Prado write the same
+    # quantity with raw kurtosis as (g4 - 1)/4; the two differ by ~0.001 in PSR. We use
+    # the excess form for the clean normal-case identity.)
     excess_kurt = kurt - 3.0
     denom = np.sqrt(max(1e-12, 1.0 - skew * sr + excess_kurt / 4.0 * sr ** 2))
     return float(norm.cdf((sr - sr_benchmark) * np.sqrt(max(1, T - 1)) / denom))

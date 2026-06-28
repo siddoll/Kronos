@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from hub.universe import load_universe
+from .universe import load_universe
 from hub.signals import SIGNALS
 from .sectors import load_sectors
 

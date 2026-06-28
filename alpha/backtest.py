@@ -9,7 +9,11 @@ from .portfolio import long_short
 from .stats import deflated_sharpe_ratio
 
 
+_EMPTY = {"ic": {}, "portfolio": {}, "n_dates": 0, "n_rows": 0}
+
 def run_backtest(panel, cfg) -> dict:
+    if panel is None or len(panel) == 0:
+        return dict(_EMPTY)
     feats = list(SIGNAL_NAMES)
     resid = neutralize(panel).values
     dates = panel["date"].values
@@ -26,18 +30,24 @@ def run_backtest(panel, cfg) -> dict:
         m = ~np.isnan(pred)
         ic[name] = ic_summary(rank_ic_series(dates[m], pred[m], resid[m]))
 
-    # portfolios for composite and the lgbm OOS predictions
+    # One consistent trial set for the Deflated Sharpe: every config we evaluated
+    # (7 signals + composite + linear_oos + lgbm_oos). sr_variance AND n_trials must
+    # describe the SAME set, else DSR is biased (too few trials -> optimistic).
     ppy = max(1, round(252 / cfg.horizon))
-    scores = {"composite": comp, "lgbm_oos": lgb}
-    spps = {}
-    for name, sc in scores.items():
-        spps[name] = long_short(panel, sc, cfg.n_quantiles, cfg.cost_bps,
-                                periods_per_year=ppy)["sharpe_per_period"]
-    sr_var = float(np.var(list(spps.values()))) or 1e-6
-    n_trials = len(ic)  # configs evaluated
+    score_map = {f: panel[f].values for f in feats}
+    score_map["composite"] = comp
+    score_map["linear_oos"] = lin
+    score_map["lgbm_oos"] = lgb
+    runs = {name: long_short(panel, sc, cfg.n_quantiles, cfg.cost_bps,
+                             periods_per_year=ppy)
+            for name, sc in score_map.items()}
+    spps = [r["sharpe_per_period"] for r in runs.values()]
+    sr_var = float(np.var(spps)) or 1e-6
+    n_trials = len(runs)  # same set the variance was measured over
+
     portfolio = {}
-    for name, sc in scores.items():
-        r = long_short(panel, sc, cfg.n_quantiles, cfg.cost_bps, periods_per_year=ppy)
+    for name in ("composite", "lgbm_oos"):
+        r = runs[name]
         net = r["net"].dropna()
         dsr = deflated_sharpe_ratio(
             r["sharpe_per_period"], len(net),
