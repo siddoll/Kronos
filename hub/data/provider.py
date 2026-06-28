@@ -88,8 +88,11 @@ class OpenBBProvider:
             if len(df):
                 row = df.iloc[-1]
                 for k in _FUND_KEYS:
-                    v = row.get(k) if hasattr(row, "get") else None
-                    out[k] = float(v) if v is not None and v == v else None
+                    try:  # one bad/non-numeric metric must not drop the rest
+                        v = row.get(k) if hasattr(row, "get") else None
+                        out[k] = float(v) if v is not None and v == v else None
+                    except (TypeError, ValueError):
+                        out[k] = None
         except Exception:
             pass
         if self._kv is not None:
@@ -97,21 +100,26 @@ class OpenBBProvider:
         return out
 
     def get_news(self, symbol, limit=5):
+        key = f"news_{symbol}_{limit}"  # cache per (symbol, limit)
         if self._kv is not None:
-            hit = self._kv.get(f"news_{symbol}")
+            hit = self._kv.get(key)
             if hit is not None:
                 return hit[:limit]
+        def _s(x):  # NaN/None-safe string (avoid the literal "nan")
+            return "" if x is None or (isinstance(x, float) and x != x) else str(x)
         out = []
         try:
             df = _to_df(self._client().news.company(symbol, limit=limit, provider="yfinance"))
             for _, r in df.iterrows():
-                out.append({"date": str(r.get("date", "")),
-                            "title": str(r.get("title", "")),
-                            "source": str(r.get("source") or r.get("publisher") or "")})
+                src = r.get("source")
+                if src is None or (isinstance(src, float) and src != src):
+                    src = r.get("publisher")
+                out.append({"date": _s(r.get("date")), "title": _s(r.get("title")),
+                            "source": _s(src)})
         except Exception:
             pass
         if self._kv is not None:
-            self._kv.put(f"news_{symbol}", out)
+            self._kv.put(key, out)
         return out[:limit]
 
 

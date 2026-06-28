@@ -29,6 +29,14 @@ def test_fundamentals_error_is_all_none():
     out = OpenBBProvider(obb=FakeObb(raise_it=True)).get_fundamentals("AAPL")
     assert all(v is None for v in out.values()) and set(out) == set(_FUND_KEYS)
 
+def test_one_bad_metric_does_not_drop_others():
+    # OpenBB free providers occasionally emit string sentinels; a non-numeric value
+    # for one key must NOT wipe out the valid metrics (review finding #1).
+    df = pd.DataFrame([{"market_cap": "N/A", "pe_ratio": 30.5, "net_margin": 0.25}])
+    out = OpenBBProvider(obb=FakeObb(df)).get_fundamentals("AAPL")
+    assert out["market_cap"] is None
+    assert out["pe_ratio"] == 30.5 and out["net_margin"] == 0.25
+
 def test_fundamentals_uses_cache(tmp_path):
     from hub.data.kvcache import KVCache
     df = pd.DataFrame([{"pe_ratio": 10.0}])
