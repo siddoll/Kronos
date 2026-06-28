@@ -14,30 +14,46 @@ _EMPTY = {"ic": {}, "portfolio": {}, "n_dates": 0, "n_rows": 0}
 def run_backtest(panel, cfg) -> dict:
     if panel is None or len(panel) == 0:
         return dict(_EMPTY)
-    feats = list(SIGNAL_NAMES)
+    feats = list(SIGNAL_NAMES)                                  # 7 price signals (name kept for the score_map below)
+    extras = [f for f in cfg.extra_features if f in panel.columns]
     resid = neutralize(panel).values
     dates = panel["date"].values
     folds = purged_walk_forward(dates, n_folds=cfg.n_folds, purge=cfg.purge)
 
     ic = {}
-    for f in feats:
+    for f in feats + extras:
         ic[f] = ic_summary(rank_ic_series(dates, panel[f].values, resid))
     comp = composite_score(panel, cfg.weights)
     ic["composite"] = ic_summary(rank_ic_series(dates, comp, resid))
+
+    def _oos_ic(pred):
+        m = ~np.isnan(pred)
+        return ic_summary(rank_ic_series(dates[m], pred[m], resid[m]))
+
     lin = linear_oos(panel, resid, folds, feats)
     lgb = lgbm_oos(panel, resid, folds, feats)
-    for name, pred in [("linear_oos", lin), ("lgbm_oos", lgb)]:
-        m = ~np.isnan(pred)
-        ic[name] = ic_summary(rank_ic_series(dates[m], pred[m], resid[m]))
+    ic["linear_oos"] = _oos_ic(lin)
+    ic["lgbm_oos"] = _oos_ic(lgb)
+    lin_ext = lgb_ext = None
+    if extras:
+        feats_all = feats + extras
+        lin_ext = linear_oos(panel, resid, folds, feats_all)
+        lgb_ext = lgbm_oos(panel, resid, folds, feats_all)
+        ic["linear_oos_ext"] = _oos_ic(lin_ext)
+        ic["lgbm_oos_ext"] = _oos_ic(lgb_ext)
 
-    # One consistent trial set for the Deflated Sharpe: every config we evaluated
-    # (7 signals + composite + linear_oos + lgbm_oos). sr_variance AND n_trials must
-    # describe the SAME set, else DSR is biased (too few trials -> optimistic).
+    # One consistent trial set for the Deflated Sharpe: EVERY config we evaluated
+    # (7 signals + composite + linear_oos + lgbm_oos, plus the *_ext models when
+    # orthogonal features are present). sr_variance AND n_trials must describe the
+    # SAME set, else DSR is biased (too few trials -> optimistic).
     ppy = max(1, round(252 / cfg.horizon))
     score_map = {f: panel[f].values for f in feats}
     score_map["composite"] = comp
     score_map["linear_oos"] = lin
     score_map["lgbm_oos"] = lgb
+    if extras:
+        score_map["linear_oos_ext"] = lin_ext
+        score_map["lgbm_oos_ext"] = lgb_ext
     runs = {name: long_short(panel, sc, cfg.n_quantiles, cfg.cost_bps,
                              periods_per_year=ppy)
             for name, sc in score_map.items()}
@@ -46,7 +62,8 @@ def run_backtest(panel, cfg) -> dict:
     n_trials = len(runs)  # same set the variance was measured over
 
     portfolio = {}
-    for name in ("composite", "lgbm_oos"):
+    report_names = ["composite", "lgbm_oos"] + (["lgbm_oos_ext"] if extras else [])
+    for name in report_names:
         r = runs[name]
         net = r["net"].dropna()
         dsr = deflated_sharpe_ratio(

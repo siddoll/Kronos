@@ -9,6 +9,7 @@ class AlphaConfig:
     warmup: int = 60
     n_quantiles: int = 5
     min_names: int = 20
+    extra_features: tuple = ()
     cost_bps: float = 10.0
     n_folds: int = 4
     purge: int = 2

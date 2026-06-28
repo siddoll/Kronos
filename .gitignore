@@ -79,3 +79,5 @@ out/
 .venv/
 out_alpha/
 .alpha_cache/
+.alpha_ext_cache/
+.alpha_cache_ext/
