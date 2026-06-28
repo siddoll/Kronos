@@ -12,6 +12,7 @@ def main(argv) -> int:
     r = sub.add_parser("run")
     r.add_argument("--universe"); r.add_argument("--out")
     r.add_argument("--horizon", type=int); r.add_argument("--cost-bps", type=float)
+    r.add_argument("--with-orthogonal", action="store_true")
     args = p.parse_args(argv)
     if args.cmd != "run":
         return 1
@@ -23,8 +24,13 @@ def main(argv) -> int:
     if args.cost_bps is not None: over["cost_bps"] = args.cost_bps
     if over:
         cfg = AlphaConfig(**{**cfg.__dict__, **over})
+    ext_provider = None
+    if args.with_orthogonal:
+        from .data import ExternalDataProvider
+        cfg = AlphaConfig(**{**cfg.__dict__, "extra_features": ("rev_mom", "pead")})
+        ext_provider = ExternalDataProvider(cfg.cache_dir + "_ext")
     provider = get_default_provider(cfg.cache_dir)
-    panel = build_panel(provider, cfg)
+    panel = build_panel(provider, cfg, ext_provider=ext_provider)
     if len(panel) == 0:
         print("empty panel (no data fetched)"); return 1
     result = run_backtest(panel, cfg)

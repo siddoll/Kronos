@@ -16,3 +16,16 @@ multiple-testing correction.
 Output in `out_alpha/`: IC table (CSV/JSON), HTML report, equity-curve PNG.
 Reports Rank-IC (mean, IC-IR, t-stat) per signal + composite + linear/LightGBM
 out-of-sample, and the long-short Sharpe with **Deflated Sharpe Ratio**.
+
+## Orthogonal features (Phase B)
+
+    .venv/bin/python -m alpha run --with-orthogonal
+
+Adds two point-in-time non-price features — analyst-revision momentum (`rev_mom`)
+and earnings-drift/PEAD (`pead`, from yfinance; needs `lxml`) — and reports their
+standalone Rank-IC plus a **price-only vs price+orthogonal** out-of-sample combiner
+comparison (`lgbm_oos` vs `lgbm_oos_ext`).
+
+> Short interest is snapshot-only on yfinance (no history) → not usable as a
+> point-in-time feature; it needs a paid feed. The `ExternalDataProvider` interface
+> is the seam to add paid revisions/short-interest/alt-data later.
