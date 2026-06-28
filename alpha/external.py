@@ -53,7 +53,7 @@ class ExternalDataProvider:
         if raw is None or len(raw) == 0:
             return pd.DataFrame({"date": pd.Series(dtype="object"), "surprise": pd.Series(dtype="float")})
         d = raw.reset_index()
-        date_col = d.columns[0]
+        date_col = next((c for c in d.columns if "date" in str(c).lower()), d.columns[0])
         dt = pd.to_datetime(d[date_col], errors="coerce")
         try:
             dt = dt.dt.tz_localize(None)

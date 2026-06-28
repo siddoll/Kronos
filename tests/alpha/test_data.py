@@ -1,5 +1,5 @@
 import pandas as pd
-from alpha.data import ExternalDataProvider as EP
+from alpha.external import ExternalDataProvider as EP
 
 def test_norm_ud_classifies_up_down():
     raw = pd.DataFrame(

@@ -34,20 +34,26 @@ def run_backtest(panel, cfg) -> dict:
     lgb = lgbm_oos(panel, resid, folds, feats)
     ic["linear_oos"] = _oos_ic(lin)
     ic["lgbm_oos"] = _oos_ic(lgb)
+    lin_ext = lgb_ext = None
     if extras:
         feats_all = feats + extras
-        ic["linear_oos_ext"] = _oos_ic(linear_oos(panel, resid, folds, feats_all))
-        lgb = lgbm_oos(panel, resid, folds, feats_all)  # use the richer model for the portfolio
-        ic["lgbm_oos_ext"] = _oos_ic(lgb)
+        lin_ext = linear_oos(panel, resid, folds, feats_all)
+        lgb_ext = lgbm_oos(panel, resid, folds, feats_all)
+        ic["linear_oos_ext"] = _oos_ic(lin_ext)
+        ic["lgbm_oos_ext"] = _oos_ic(lgb_ext)
 
-    # One consistent trial set for the Deflated Sharpe: every config we evaluated
-    # (7 signals + composite + linear_oos + lgbm_oos). sr_variance AND n_trials must
-    # describe the SAME set, else DSR is biased (too few trials -> optimistic).
+    # One consistent trial set for the Deflated Sharpe: EVERY config we evaluated
+    # (7 signals + composite + linear_oos + lgbm_oos, plus the *_ext models when
+    # orthogonal features are present). sr_variance AND n_trials must describe the
+    # SAME set, else DSR is biased (too few trials -> optimistic).
     ppy = max(1, round(252 / cfg.horizon))
     score_map = {f: panel[f].values for f in feats}
     score_map["composite"] = comp
     score_map["linear_oos"] = lin
     score_map["lgbm_oos"] = lgb
+    if extras:
+        score_map["linear_oos_ext"] = lin_ext
+        score_map["lgbm_oos_ext"] = lgb_ext
     runs = {name: long_short(panel, sc, cfg.n_quantiles, cfg.cost_bps,
                              periods_per_year=ppy)
             for name, sc in score_map.items()}
@@ -56,7 +62,8 @@ def run_backtest(panel, cfg) -> dict:
     n_trials = len(runs)  # same set the variance was measured over
 
     portfolio = {}
-    for name in ("composite", "lgbm_oos"):
+    report_names = ["composite", "lgbm_oos"] + (["lgbm_oos_ext"] if extras else [])
+    for name in report_names:
         r = runs[name]
         net = r["net"].dropna()
         dsr = deflated_sharpe_ratio(

@@ -26,7 +26,7 @@ def main(argv) -> int:
         cfg = AlphaConfig(**{**cfg.__dict__, **over})
     ext_provider = None
     if args.with_orthogonal:
-        from .data import ExternalDataProvider
+        from .external import ExternalDataProvider
         cfg = AlphaConfig(**{**cfg.__dict__, "extra_features": ("rev_mom", "pead")})
         ext_provider = ExternalDataProvider(cfg.cache_dir + "_ext")
     provider = get_default_provider(cfg.cache_dir)
