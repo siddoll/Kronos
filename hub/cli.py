@@ -14,6 +14,9 @@ def main(argv) -> int:
     s.add_argument("--top-k", type=int)
     s.add_argument("--universe")
     s.add_argument("--out")
+    b = sub.add_parser("backtest")
+    b.add_argument("--universe")
+    b.add_argument("--horizon", type=int, default=10)
     args = p.parse_args(argv)
 
     if args.cmd == "scan":
@@ -35,5 +38,23 @@ def main(argv) -> int:
               f"{len(result['skipped'])} skipped")
         for k, v in paths.items():
             print(f"  {k}: {v}")
+        return 0
+    if args.cmd == "backtest":
+        from .universe import load_universe
+        from .validate import backtest_screen
+        cfg = HubConfig.default()
+        if args.universe:
+            cfg = HubConfig(**{**cfg.__dict__, "universe": args.universe})
+        provider = get_default_provider(cfg.cache_dir)
+        frames = {}
+        for sym in load_universe(cfg.universe):
+            try:
+                frames[sym] = provider.get_ohlcv(sym, cfg.lookback_days + 60)
+            except Exception:
+                pass
+        m = backtest_screen(frames, cfg, horizon=args.horizon)
+        print("Walk-forward screen backtest (research funnel, not alpha):")
+        for k, v in m.items():
+            print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
         return 0
     return 1
