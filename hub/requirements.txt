@@ -5,3 +5,4 @@ yfinance
 anthropic
 pyarrow
 openbb
+pandas-ta
