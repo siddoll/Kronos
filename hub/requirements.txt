@@ -1,0 +1,8 @@
+pandas>=2.2.3
+numpy
+scipy
+yfinance
+anthropic
+pyarrow
+# optional richer data provider:
+# openbb>=4.7
