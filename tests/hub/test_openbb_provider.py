@@ -36,3 +36,25 @@ def test_fundamentals_uses_cache(tmp_path):
     p = OpenBBProvider(obb=FakeObb(df), kv=kv)
     p.get_fundamentals("AAA")
     assert kv.get("fund_AAA")["pe_ratio"] == 10.0  # written to cache
+
+
+# ---- Task 3: news tests ----
+
+class _News:
+    def __init__(self, df): self._df = df
+    def company(self, symbol, limit=5, provider=None): return self._df
+
+class FakeObbNews:
+    def __init__(self, news_df):
+        class N: pass
+        self.news = _News(news_df)
+
+def test_news_mapped():
+    df = pd.DataFrame([{"date": "2026-06-27", "title": "X beats", "source": "PR"},
+                       {"date": "2026-06-26", "title": "Y", "source": "Wire"}])
+    out = OpenBBProvider(obb=FakeObbNews(df)).get_news("AAPL", limit=5)
+    assert out[0]["title"] == "X beats" and out[0]["source"] == "PR"
+
+def test_news_empty():
+    out = OpenBBProvider(obb=FakeObbNews(pd.DataFrame())).get_news("AAPL")
+    assert out == []

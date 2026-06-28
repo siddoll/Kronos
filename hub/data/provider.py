@@ -97,12 +97,29 @@ class OpenBBProvider:
         return out
 
     def get_news(self, symbol, limit=5):
-        return YFinanceProvider().get_news(symbol, limit)  # upgraded in Task 3
+        if self._kv is not None:
+            hit = self._kv.get(f"news_{symbol}")
+            if hit is not None:
+                return hit[:limit]
+        out = []
+        try:
+            df = _to_df(self._client().news.company(symbol, limit=limit, provider="yfinance"))
+            for _, r in df.iterrows():
+                out.append({"date": str(r.get("date", "")),
+                            "title": str(r.get("title", "")),
+                            "source": str(r.get("source") or r.get("publisher") or "")})
+        except Exception:
+            pass
+        if self._kv is not None:
+            self._kv.put(f"news_{symbol}", out)
+        return out[:limit]
+
 
 def get_default_provider(cache_dir: str) -> DataProvider:
     try:
         import openbb  # noqa
-        inner: DataProvider = OpenBBProvider()
+        from .kvcache import KVCache
+        inner: DataProvider = OpenBBProvider(kv=KVCache(cache_dir + "_kv"))
     except Exception:
         inner = YFinanceProvider()
     return CachedProvider(inner, OHLCVCache(cache_dir))
