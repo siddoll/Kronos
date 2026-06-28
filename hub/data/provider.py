@@ -72,7 +72,12 @@ class OpenBBProvider:
         return self._obb
 
     def get_ohlcv(self, symbol, lookback_days):
-        df = _to_df(self._client().equity.price.historical(symbol, provider="yfinance"))
+        # OpenBB's default range is ~1y (~250 bars); request enough calendar history
+        # to yield `lookback_days` TRADING bars (else 252-bar criteria can never pass).
+        import datetime as _dt
+        start = (_dt.date.today() - _dt.timedelta(days=int(lookback_days * 1.7) + 60)).isoformat()
+        df = _to_df(self._client().equity.price.historical(
+            symbol, start_date=start, provider="yfinance"))
         df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].astype(float)
         df.index = pd.to_datetime(df.index).tz_localize(None)
         return df.dropna().tail(lookback_days)
