@@ -33,7 +33,7 @@ _FAIL = lambda: CritResult(False, 0.0, float("nan"))
 def near_52w_high(within_pct=0.05, window=252, hard=True) -> Criterion:
     def fn(price, fund):
         c = price["close"]
-        if len(c) < 20:
+        if len(c) < window:   # need ~a full year of bars for a real 52-week high
             return _FAIL()
         hi = float(c.tail(window).max()); last = float(c.iloc[-1])
         dist = (hi - last) / hi if hi > 0 else 1.0

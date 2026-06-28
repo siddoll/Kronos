@@ -23,11 +23,14 @@ class CachedProvider:
     def __init__(self, inner: DataProvider, cache: OHLCVCache):
         self.inner, self.cache = inner, cache
     def get_ohlcv(self, symbol, lookback_days):
-        hit = self.cache.get(symbol)
+        # key by (symbol, lookback_days) so a shorter cached frame from one command
+        # (e.g. scan, 260 bars) can't shadow a longer fetch from another (screen, 300).
+        key = f"{symbol}_{lookback_days}"
+        hit = self.cache.get(key)
         if hit is not None:
             return hit
         df = self.inner.get_ohlcv(symbol, lookback_days)
-        self.cache.put(symbol, df)
+        self.cache.put(key, df)
         return df
     def get_news(self, symbol, limit=5): return self.inner.get_news(symbol, limit)
     def get_fundamentals(self, symbol): return self.inner.get_fundamentals(symbol)

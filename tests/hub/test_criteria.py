@@ -33,3 +33,10 @@ def test_insufficient_history_fails_safe():
     short = _price([100, 101, 102])
     r = momentum_12_1_positive().evaluate(short, None)
     assert not r.passed and r.score == 0.0  # no crash
+
+def test_near_high_needs_full_year():
+    # < window bars must NOT spuriously pass (review I1): a 60-bar rising name is
+    # not a 52-week high.
+    short = _price(np.linspace(100, 160, 60))
+    r = near_52w_high(0.05, window=252).evaluate(short, None)
+    assert not r.passed and r.score == 0.0
