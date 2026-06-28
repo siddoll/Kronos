@@ -16,16 +16,18 @@ def composite_score(panel: pd.DataFrame, weights: dict) -> np.ndarray:
 def _oos(panel, target, folds, feats, fit_predict):
     pred = np.full(len(panel), np.nan)
     date = panel["date"].values.astype("datetime64[ns]")
-    X = panel[feats].values
+    X = panel[feats].values.astype(float)
     y = np.asarray(target, float)
     for train_dates, test_dates in folds:
-        train_arr = np.array(train_dates, dtype="datetime64[ns]")
-        test_arr = np.array(test_dates, dtype="datetime64[ns]")
-        tr = np.isin(date, train_arr)
-        te = np.isin(date, test_arr)
+        tr = np.isin(date, np.array(train_dates, dtype="datetime64[ns]"))
+        te = np.isin(date, np.array(test_dates, dtype="datetime64[ns]"))
         if tr.sum() < 10 or te.sum() == 0:
             continue
-        pred[te] = fit_predict(X[tr], y[tr], X[te])
+        med = np.nanmedian(X[tr], axis=0)          # train-fold medians (no leakage)
+        med = np.where(np.isnan(med), 0.0, med)
+        Xtr = np.where(np.isnan(X[tr]), med, X[tr])
+        Xte = np.where(np.isnan(X[te]), med, X[te])
+        pred[te] = fit_predict(Xtr, y[tr], Xte)
     return pred
 
 

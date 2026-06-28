@@ -14,21 +14,31 @@ _EMPTY = {"ic": {}, "portfolio": {}, "n_dates": 0, "n_rows": 0}
 def run_backtest(panel, cfg) -> dict:
     if panel is None or len(panel) == 0:
         return dict(_EMPTY)
-    feats = list(SIGNAL_NAMES)
+    feats = list(SIGNAL_NAMES)                                  # 7 price signals (name kept for the score_map below)
+    extras = [f for f in cfg.extra_features if f in panel.columns]
     resid = neutralize(panel).values
     dates = panel["date"].values
     folds = purged_walk_forward(dates, n_folds=cfg.n_folds, purge=cfg.purge)
 
     ic = {}
-    for f in feats:
+    for f in feats + extras:
         ic[f] = ic_summary(rank_ic_series(dates, panel[f].values, resid))
     comp = composite_score(panel, cfg.weights)
     ic["composite"] = ic_summary(rank_ic_series(dates, comp, resid))
+
+    def _oos_ic(pred):
+        m = ~np.isnan(pred)
+        return ic_summary(rank_ic_series(dates[m], pred[m], resid[m]))
+
     lin = linear_oos(panel, resid, folds, feats)
     lgb = lgbm_oos(panel, resid, folds, feats)
-    for name, pred in [("linear_oos", lin), ("lgbm_oos", lgb)]:
-        m = ~np.isnan(pred)
-        ic[name] = ic_summary(rank_ic_series(dates[m], pred[m], resid[m]))
+    ic["linear_oos"] = _oos_ic(lin)
+    ic["lgbm_oos"] = _oos_ic(lgb)
+    if extras:
+        feats_all = feats + extras
+        ic["linear_oos_ext"] = _oos_ic(linear_oos(panel, resid, folds, feats_all))
+        lgb = lgbm_oos(panel, resid, folds, feats_all)  # use the richer model for the portfolio
+        ic["lgbm_oos_ext"] = _oos_ic(lgb)
 
     # One consistent trial set for the Deflated Sharpe: every config we evaluated
     # (7 signals + composite + linear_oos + lgbm_oos). sr_variance AND n_trials must
