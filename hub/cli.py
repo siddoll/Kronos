@@ -40,7 +40,10 @@ def main(argv) -> int:
         result = scan(cfg, provider)
         if not args.no_explain:
             import anthropic
-            result = explain_top(result, provider, anthropic.Anthropic(), cfg)
+            from .data.filings import FilingProvider
+            from .data.kvcache import KVCache
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            result = explain_top(result, provider, anthropic.Anthropic(), cfg, filing_provider=fp)
         date_str = dt.datetime.now().strftime("%Y%m%d")
         paths = write_reports(result, cfg, date_str)
         print(f"{len(result['candidates'])} candidates, "
@@ -65,7 +68,10 @@ def main(argv) -> int:
         result = run_screen(universe, provider, criteria, top_k=cfg.top_k)
         if not args.no_explain and result["candidates"]:
             import anthropic
-            result = explain_top(result, provider, anthropic.Anthropic(), cfg)
+            from .data.filings import FilingProvider
+            from .data.kvcache import KVCache
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            result = explain_top(result, provider, anthropic.Anthropic(), cfg, filing_provider=fp)
         date_str = dt.datetime.now().strftime("%Y%m%d")
         paths = write_reports(result, cfg, date_str)
         print(f"preset '{args.preset}': {len(result['candidates'])} passed, "

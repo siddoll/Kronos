@@ -41,7 +41,10 @@ if run or "result" not in st.session_state:
         if use_llm and result["candidates"]:
             import anthropic
             from hub.explain import explain_top
-            result = explain_top(result, _provider(), anthropic.Anthropic(), cfg)
+            from hub.data.filings import FilingProvider
+            from hub.data.kvcache import KVCache
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            result = explain_top(result, _provider(), anthropic.Anthropic(), cfg, filing_provider=fp)
         st.session_state["result"] = result
 
 result = st.session_state["result"]
