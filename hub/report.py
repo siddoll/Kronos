@@ -28,12 +28,19 @@ def write_html(result: dict, cfg, date_str: str) -> str:
         note = expl.get("note", "") if isinstance(expl, dict) else ""
         flags = ", ".join((expl.get("risk_flags") or [])) if isinstance(expl, dict) else ""
         subs = " ".join(f"{k}:{v:.2f}" for k, v in c.get("subscores", {}).items())
+        fund = c.get("fundamentals") or {}
+        def _f(k):
+            v = fund.get(k)
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "—"
+        fund_cell = (f"P/E {_f('pe_ratio')} · EPSg {_f('earnings_growth')} · "
+                     f"NM {_f('net_margin')}") if fund else ""
+        fund_cell = _html.escape(fund_cell)
         # Escape all dynamic values — note/flags derive from untrusted web news via the LLM.
         sym = _html.escape(str(c.get("symbol", "")))
         note, flags, subs = _html.escape(note), _html.escape(flags), _html.escape(subs)
         rows.append(f"<tr><td>{i}</td><td><b>{sym}</b></td>"
                     f"<td>{c['composite']:.3f}</td><td>{subs}</td>"
-                    f"<td>{note}</td><td>{flags}</td></tr>")
+                    f"<td>{note}</td><td>{flags}</td><td>{fund_cell}</td></tr>")
     html = (f"<html><head><meta charset='utf-8'><title>Discovery Hub {date_str}</title>"
             "<style>body{font-family:sans-serif;margin:24px}"
             "table{border-collapse:collapse;width:100%}"
@@ -43,7 +50,7 @@ def write_html(result: dict, cfg, date_str: str) -> str:
             f"<p>{len(result['candidates'])} candidates · {len(result['skipped'])} skipped. "
             "Research funnel, not buy signals.</p>"
             "<table><tr><th>#</th><th>Symbol</th><th>Score</th><th>Signals</th>"
-            "<th>Why</th><th>Risk</th></tr>" + "".join(rows) + "</table></body></html>")
+            "<th>Why</th><th>Risk</th><th>Fundamentals</th></tr>" + "".join(rows) + "</table></body></html>")
     with open(path, "w") as f:
         f.write(html)
     return path
