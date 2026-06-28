@@ -6,3 +6,4 @@ anthropic
 pyarrow
 openbb
 pandas-ta
+streamlit
