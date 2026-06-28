@@ -23,11 +23,14 @@ class CachedProvider:
     def __init__(self, inner: DataProvider, cache: OHLCVCache):
         self.inner, self.cache = inner, cache
     def get_ohlcv(self, symbol, lookback_days):
-        hit = self.cache.get(symbol)
+        # key by (symbol, lookback_days) so a shorter cached frame from one command
+        # (e.g. scan, 260 bars) can't shadow a longer fetch from another (screen, 300).
+        key = f"{symbol}_{lookback_days}"
+        hit = self.cache.get(key)
         if hit is not None:
             return hit
         df = self.inner.get_ohlcv(symbol, lookback_days)
-        self.cache.put(symbol, df)
+        self.cache.put(key, df)
         return df
     def get_news(self, symbol, limit=5): return self.inner.get_news(symbol, limit)
     def get_fundamentals(self, symbol): return self.inner.get_fundamentals(symbol)
@@ -72,7 +75,12 @@ class OpenBBProvider:
         return self._obb
 
     def get_ohlcv(self, symbol, lookback_days):
-        df = _to_df(self._client().equity.price.historical(symbol, provider="yfinance"))
+        # OpenBB's default range is ~1y (~250 bars); request enough calendar history
+        # to yield `lookback_days` TRADING bars (else 252-bar criteria can never pass).
+        import datetime as _dt
+        start = (_dt.date.today() - _dt.timedelta(days=int(lookback_days * 1.7) + 60)).isoformat()
+        df = _to_df(self._client().equity.price.historical(
+            symbol, start_date=start, provider="yfinance"))
         df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].astype(float)
         df.index = pd.to_datetime(df.index).tz_localize(None)
         return df.dropna().tail(lookback_days)
