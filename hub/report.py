@@ -1,4 +1,5 @@
 import os, json, csv
+import html as _html
 
 def write_reports(result: dict, cfg, date_str: str) -> dict:
     os.makedirs(cfg.out_dir, exist_ok=True)
@@ -27,7 +28,10 @@ def write_html(result: dict, cfg, date_str: str) -> str:
         note = expl.get("note", "") if isinstance(expl, dict) else ""
         flags = ", ".join((expl.get("risk_flags") or [])) if isinstance(expl, dict) else ""
         subs = " ".join(f"{k}:{v:.2f}" for k, v in c.get("subscores", {}).items())
-        rows.append(f"<tr><td>{i}</td><td><b>{c['symbol']}</b></td>"
+        # Escape all dynamic values — note/flags derive from untrusted web news via the LLM.
+        sym = _html.escape(str(c.get("symbol", "")))
+        note, flags, subs = _html.escape(note), _html.escape(flags), _html.escape(subs)
+        rows.append(f"<tr><td>{i}</td><td><b>{sym}</b></td>"
                     f"<td>{c['composite']:.3f}</td><td>{subs}</td>"
                     f"<td>{note}</td><td>{flags}</td></tr>")
     html = (f"<html><head><meta charset='utf-8'><title>Discovery Hub {date_str}</title>"
