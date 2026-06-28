@@ -2,6 +2,18 @@ from typing import Protocol
 import pandas as pd
 from .cache import OHLCVCache
 
+_FUND_KEYS = ["market_cap", "pe_ratio", "forward_pe", "peg_ratio", "earnings_growth",
+              "revenue_growth", "gross_margin", "net_margin", "debt_to_equity",
+              "current_ratio", "dividend_yield"]
+
+
+def _to_df(x):
+    if isinstance(x, pd.DataFrame):
+        return x
+    if hasattr(x, "to_dataframe"):
+        return x.to_dataframe()
+    return pd.DataFrame()
+
 class DataProvider(Protocol):
     def get_ohlcv(self, symbol: str, lookback_days: int) -> pd.DataFrame: ...
     def get_news(self, symbol: str, limit: int = 5) -> list[dict]: ...
@@ -46,24 +58,76 @@ class YFinanceProvider:
                 "next_earnings_date": str(info.get("earningsTimestamp","")) or None,
                 "float_shares": info.get("floatShares")}
 
-class OpenBBProvider:  # used only when openbb is installed
+class OpenBBProvider:
+    """Rich data via OpenBB. obb is injectable for offline testing."""
+    def __init__(self, obb=None, kv=None):
+        self._obb = obb
+        self._kv = kv
+
+    def _client(self):
+        if self._obb is None:
+            from openbb import obb
+            obb.user.preferences.output_type = "dataframe"
+            self._obb = obb
+        return self._obb
+
     def get_ohlcv(self, symbol, lookback_days):
-        from openbb import obb
-        import datetime as _dt  # noqa
-        data = obb.equity.price.historical(symbol, provider="yfinance")
-        df = data.to_dataframe().rename(columns=str.lower)
-        df = df[["open","high","low","close","volume"]].astype(float)
+        df = _to_df(self._client().equity.price.historical(symbol, provider="yfinance"))
+        df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].astype(float)
         df.index = pd.to_datetime(df.index).tz_localize(None)
         return df.dropna().tail(lookback_days)
-    def get_news(self, symbol, limit=5):
-        return YFinanceProvider().get_news(symbol, limit)
+
     def get_fundamentals(self, symbol):
-        return YFinanceProvider().get_fundamentals(symbol)
+        if self._kv is not None:
+            hit = self._kv.get(f"fund_{symbol}")
+            if hit is not None:
+                return hit
+        out = {k: None for k in _FUND_KEYS}
+        try:
+            df = _to_df(self._client().equity.fundamental.metrics(symbol, provider="yfinance"))
+            if len(df):
+                row = df.iloc[-1]
+                for k in _FUND_KEYS:
+                    try:  # one bad/non-numeric metric must not drop the rest
+                        v = row.get(k) if hasattr(row, "get") else None
+                        out[k] = float(v) if v is not None and v == v else None
+                    except (TypeError, ValueError):
+                        out[k] = None
+        except Exception:
+            pass
+        if self._kv is not None:
+            self._kv.put(f"fund_{symbol}", out)
+        return out
+
+    def get_news(self, symbol, limit=5):
+        key = f"news_{symbol}_{limit}"  # cache per (symbol, limit)
+        if self._kv is not None:
+            hit = self._kv.get(key)
+            if hit is not None:
+                return hit[:limit]
+        def _s(x):  # NaN/None-safe string (avoid the literal "nan")
+            return "" if x is None or (isinstance(x, float) and x != x) else str(x)
+        out = []
+        try:
+            df = _to_df(self._client().news.company(symbol, limit=limit, provider="yfinance"))
+            for _, r in df.iterrows():
+                src = r.get("source")
+                if src is None or (isinstance(src, float) and src != src):
+                    src = r.get("publisher")
+                out.append({"date": _s(r.get("date")), "title": _s(r.get("title")),
+                            "source": _s(src)})
+        except Exception:
+            pass
+        if self._kv is not None:
+            self._kv.put(key, out)
+        return out[:limit]
+
 
 def get_default_provider(cache_dir: str) -> DataProvider:
     try:
         import openbb  # noqa
-        inner: DataProvider = OpenBBProvider()
+        from .kvcache import KVCache
+        inner: DataProvider = OpenBBProvider(kv=KVCache(cache_dir + "_kv"))
     except Exception:
         inner = YFinanceProvider()
     return CachedProvider(inner, OHLCVCache(cache_dir))

@@ -32,4 +32,5 @@ def explain_top(result, provider, client, cfg) -> dict:
     out = copy.deepcopy(result)
     for c in out["candidates"]:
         c["explanation"] = explain_candidate(c["symbol"], provider, client, cfg.explain_model)
+        c["fundamentals"] = provider.get_fundamentals(c["symbol"])
     return out
