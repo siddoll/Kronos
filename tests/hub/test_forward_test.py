@@ -33,3 +33,21 @@ def test_random_walk_has_no_edge():
 def test_empty_is_safe():
     r = forward_test({}, CRIT, horizons=(5,))
     assert r["n_dates"] == 0 and r["horizons"][5]["n"] == 0
+
+def test_nan_forward_close_does_not_poison_aggregates():
+    # HONESTY GUARD: if a forward close is NaN (mid-series gap), skip that return
+    # so NaN does NOT poison pick_return, market_return, edge via np.mean()
+    closes_good = list(np.linspace(100, 110, 300))
+    closes_bad = list(np.linspace(100, 110, 300))
+    # Plant NaN in the forward window for some dates
+    # origin=260, h=5 → j=264. Plant NaN at index 264.
+    closes_bad[264] = np.nan
+
+    frames = {"GOOD": _frame(closes_good), "BAD": _frame(closes_bad)}
+    r = forward_test(frames, CRIT, horizons=(5,), step=1, warmup=60)
+
+    # All aggregates must be finite (not NaN) — even with one name having a NaN in forward window
+    h = 5
+    for key in ["pick_return", "market_return", "edge"]:
+        val = r["horizons"][h][key]
+        assert val == val, f"horizon {h} {key} is NaN: {val}"

@@ -30,7 +30,9 @@ def forward_test(frames, criteria, horizons=(5, 10, 20), step=5, warmup=252) -> 
             for h in horizons:
                 j = origin - 1 + h
                 if j < len(df) and c0 > 0:
-                    got[h] = float(df["close"].iloc[j] / c0 - 1.0)
+                    r = float(df["close"].iloc[j] / c0 - 1.0)
+                    if r == r:  # skip if NaN
+                        got[h] = r
             if not got:
                 continue
             any_data = True
