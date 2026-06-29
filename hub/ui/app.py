@@ -1,10 +1,13 @@
+import os
 import streamlit as st
 import plotly.graph_objects as go
 from hub.config import HubConfig
 from hub.universe import load_universe
 from hub.data.provider import get_default_provider
 from hub.screen.screener import run_screen
-from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES
+from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES, load_screens, save_screen
+
+SCREENS_PATH = os.path.join(os.path.expanduser("~"), ".hub_screens.json")
 
 st.set_page_config(page_title="Stock Research Screener", layout="wide")
 st.title("📈 Stock Research Screener")
@@ -24,16 +27,35 @@ def _run(universe_name, preset, pe_max, eps_growth_min, near_high_pct, top_k):
                                        "near_high_pct": near_high_pct})
     return run_screen(universe, _provider(), criteria, top_k=top_k)
 
+# Seed control state once so a loaded screen can pre-fill the widgets (set before they render).
+_DEFAULTS = {"preset": PRESET_NAMES[0], "pe_max": 40, "eps_growth_min": 0.10,
+             "near_high_pct": 0.07, "top_k": 20}
+for _k, _v in _DEFAULTS.items():
+    st.session_state.setdefault(_k, _v)
+
 with st.sidebar:
     st.header("Screen settings")
+    saved = load_screens(SCREENS_PATH)
+    if saved:
+        pick = st.selectbox("Load saved screen", ["—"] + list(saved))
+        if st.button("📂 Load") and pick != "—":
+            for _k, _v in saved[pick].items():
+                if _k in _DEFAULTS:
+                    st.session_state[_k] = _v
+            st.rerun()
     universe_name = st.selectbox("Universe", ["sp500_sample"])
-    preset = st.selectbox("Preset thesis", PRESET_NAMES)
-    pe_max = st.slider("Max P/E", 5, 80, 40)
-    eps_growth_min = st.slider("Min earnings growth", -0.20, 0.50, 0.10, 0.01)
-    near_high_pct = st.slider("Within % of 52w high", 0.01, 0.30, 0.07, 0.01)
-    top_k = st.slider("Top K", 5, 50, 20)
+    preset = st.selectbox("Preset thesis", PRESET_NAMES, key="preset")
+    pe_max = st.slider("Max P/E", 5, 80, key="pe_max")
+    eps_growth_min = st.slider("Min earnings growth", -0.20, 0.50, step=0.01, key="eps_growth_min")
+    near_high_pct = st.slider("Within % of 52w high", 0.01, 0.30, step=0.01, key="near_high_pct")
+    top_k = st.slider("Top K", 5, 50, key="top_k")
     use_llm = st.toggle("Include LLM 'why' (uses API)", value=False)
     run = st.button("Run screen", type="primary", use_container_width=True)
+    st.divider()
+    new_name = st.text_input("Save current screen as")
+    if st.button("💾 Save screen") and new_name:
+        save_screen(new_name, {k: st.session_state[k] for k in _DEFAULTS}, SCREENS_PATH)
+        st.success(f"Saved '{new_name}'")
 
 if run or "result" not in st.session_state:
     with st.spinner("Screening — fetching prices + fundamentals…"):
@@ -41,7 +63,10 @@ if run or "result" not in st.session_state:
         if use_llm and result["candidates"]:
             import anthropic
             from hub.explain import explain_top
-            result = explain_top(result, _provider(), anthropic.Anthropic(), cfg)
+            from hub.data.filings import FilingProvider
+            from hub.data.kvcache import KVCache
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings", ttl_hours=24 * 30))
+            result = explain_top(result, _provider(), anthropic.Anthropic(), cfg, filing_provider=fp)
         st.session_state["result"] = result
 
 result = st.session_state["result"]
@@ -52,6 +77,9 @@ if not cands:
     st.info("No matches — loosen the filters (raise Max P/E, lower Min earnings growth, "
             "or widen the 52-week-high band).")
 else:
+    st.download_button("⬇️ Download watchlist (CSV)",
+                       screen_to_table(result).to_csv(index=False),
+                       file_name="watchlist.csv", mime="text/csv")
     st.dataframe(screen_to_table(result), use_container_width=True, hide_index=True)
     sel = st.selectbox("Inspect a candidate", [c["symbol"] for c in cands])
     cand = next(c for c in cands if c["symbol"] == sel)
