@@ -34,3 +34,25 @@ def screen_to_table(result: dict) -> pd.DataFrame:
         })
     return pd.DataFrame(rows, columns=["Symbol", "Score", "Criteria", "P/E",
                                        "EPS growth", "Net margin"])
+
+
+import json as _json
+
+
+def load_screens(path) -> dict:
+    try:
+        with open(path) as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def save_screen(name, settings, path) -> dict:
+    screens = load_screens(path)
+    screens[str(name)] = settings
+    try:
+        with open(path, "w") as f:
+            _json.dump(screens, f, indent=2)
+    except Exception:
+        pass
+    return screens

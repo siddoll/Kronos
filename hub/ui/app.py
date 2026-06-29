@@ -1,10 +1,13 @@
+import os
 import streamlit as st
 import plotly.graph_objects as go
 from hub.config import HubConfig
 from hub.universe import load_universe
 from hub.data.provider import get_default_provider
 from hub.screen.screener import run_screen
-from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES
+from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES, load_screens, save_screen
+
+SCREENS_PATH = os.path.join(os.path.expanduser("~"), ".hub_screens.json")
 
 st.set_page_config(page_title="Stock Research Screener", layout="wide")
 st.title("📈 Stock Research Screener")
@@ -34,6 +37,19 @@ with st.sidebar:
     top_k = st.slider("Top K", 5, 50, 20)
     use_llm = st.toggle("Include LLM 'why' (uses API)", value=False)
     run = st.button("Run screen", type="primary", use_container_width=True)
+    st.divider()
+    saved = load_screens(SCREENS_PATH)
+    if saved:
+        pick = st.selectbox("Load saved screen", ["—"] + list(saved))
+        if pick != "—":
+            s = saved[pick]
+            st.caption(f"Loaded '{pick}': {s}")
+    new_name = st.text_input("Save current screen as")
+    if st.button("💾 Save screen") and new_name:
+        save_screen(new_name, {"preset": preset, "pe_max": pe_max,
+                               "eps_growth_min": eps_growth_min,
+                               "near_high_pct": near_high_pct, "top_k": top_k}, SCREENS_PATH)
+        st.success(f"Saved '{new_name}'")
 
 if run or "result" not in st.session_state:
     with st.spinner("Screening — fetching prices + fundamentals…"):
@@ -55,6 +71,9 @@ if not cands:
     st.info("No matches — loosen the filters (raise Max P/E, lower Min earnings growth, "
             "or widen the 52-week-high band).")
 else:
+    st.download_button("⬇️ Download watchlist (CSV)",
+                       screen_to_table(result).to_csv(index=False),
+                       file_name="watchlist.csv", mime="text/csv")
     st.dataframe(screen_to_table(result), use_container_width=True, hide_index=True)
     sel = st.selectbox("Inspect a candidate", [c["symbol"] for c in cands])
     cand = next(c for c in cands if c["symbol"] == sel)
