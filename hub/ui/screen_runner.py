@@ -51,8 +51,9 @@ def save_screen(name, settings, path) -> dict:
     screens = load_screens(path)
     screens[str(name)] = settings
     try:
+        blob = _json.dumps(screens, indent=2)   # serialize before opening (no truncate-on-error)
         with open(path, "w") as f:
-            _json.dump(screens, f, indent=2)
+            f.write(blob)
     except Exception:
         pass
     return screens

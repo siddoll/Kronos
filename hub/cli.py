@@ -42,7 +42,7 @@ def main(argv) -> int:
             import anthropic
             from .data.filings import FilingProvider
             from .data.kvcache import KVCache
-            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings", ttl_hours=24 * 30))
             result = explain_top(result, provider, anthropic.Anthropic(), cfg, filing_provider=fp)
         date_str = dt.datetime.now().strftime("%Y%m%d")
         paths = write_reports(result, cfg, date_str)
@@ -70,7 +70,7 @@ def main(argv) -> int:
             import anthropic
             from .data.filings import FilingProvider
             from .data.kvcache import KVCache
-            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings", ttl_hours=24 * 30))
             result = explain_top(result, provider, anthropic.Anthropic(), cfg, filing_provider=fp)
         date_str = dt.datetime.now().strftime("%Y%m%d")
         paths = write_reports(result, cfg, date_str)

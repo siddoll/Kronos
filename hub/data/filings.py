@@ -1,6 +1,9 @@
 import os
 
-_SECTIONS = ("risk_factors", "business", "mda")
+# (output_key, edgartools TenK attribute) — MD&A's real attribute is management_discussion.
+_SECTIONS = (("risk_factors", "risk_factors"),
+             ("business", "business"),
+             ("mda", "management_discussion"))
 _DEFAULT_IDENTITY = "kronos-research-tool research@example.com"
 
 class FilingProvider:
@@ -27,15 +30,13 @@ class FilingProvider:
             out["form"] = str(getattr(f, "form", "") or "") or None
             out["date"] = str(getattr(f, "filing_date", "") or "") or None
             obj = f.obj()
-            for s in _SECTIONS:
+            for key, attr in _SECTIONS:
                 try:
-                    t = getattr(obj, s, None)
+                    t = getattr(obj, attr, None)
                     if t:
                         ts = " ".join(str(t).split())
-                        if len(ts) > max_chars:
-                            out["sections"][s] = ts[:max_chars]
-                        else:
-                            out["sections"][s] = ts
+                        if ts:  # skip whitespace-only sections
+                            out["sections"][key] = ts[:max_chars]
                 except Exception:
                     pass
         except Exception:

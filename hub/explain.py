@@ -20,9 +20,11 @@ def explain_candidate(symbol, provider, client, model, filing_provider=None) -> 
                 if secs:
                     rf = (secs.get("risk_factors") or "")[:1500]
                     bus = (secs.get("business") or "")[:800]
+                    mda = (secs.get("mda") or "")[:1000]
                     filing_block = (f"\nFrom the latest {fs.get('form')} ({fs.get('date')}):\n"
                                     f"Risk factors: {rf}\nBusiness: {bus}\n"
-                                    "Ground the bull/bear/risk in these disclosures when relevant.\n")
+                                    + (f"Management discussion: {mda}\n" if mda else "")
+                                    + "Ground the bull/bear/risk in these disclosures when relevant.\n")
             except Exception:
                 filing_block = ""
         prompt = (f"Stock {symbol}. Recent headlines:\n{headlines}\n"

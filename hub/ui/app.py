@@ -27,28 +27,34 @@ def _run(universe_name, preset, pe_max, eps_growth_min, near_high_pct, top_k):
                                        "near_high_pct": near_high_pct})
     return run_screen(universe, _provider(), criteria, top_k=top_k)
 
+# Seed control state once so a loaded screen can pre-fill the widgets (set before they render).
+_DEFAULTS = {"preset": PRESET_NAMES[0], "pe_max": 40, "eps_growth_min": 0.10,
+             "near_high_pct": 0.07, "top_k": 20}
+for _k, _v in _DEFAULTS.items():
+    st.session_state.setdefault(_k, _v)
+
 with st.sidebar:
     st.header("Screen settings")
-    universe_name = st.selectbox("Universe", ["sp500_sample"])
-    preset = st.selectbox("Preset thesis", PRESET_NAMES)
-    pe_max = st.slider("Max P/E", 5, 80, 40)
-    eps_growth_min = st.slider("Min earnings growth", -0.20, 0.50, 0.10, 0.01)
-    near_high_pct = st.slider("Within % of 52w high", 0.01, 0.30, 0.07, 0.01)
-    top_k = st.slider("Top K", 5, 50, 20)
-    use_llm = st.toggle("Include LLM 'why' (uses API)", value=False)
-    run = st.button("Run screen", type="primary", use_container_width=True)
-    st.divider()
     saved = load_screens(SCREENS_PATH)
     if saved:
         pick = st.selectbox("Load saved screen", ["—"] + list(saved))
-        if pick != "—":
-            s = saved[pick]
-            st.caption(f"Loaded '{pick}': {s}")
+        if st.button("📂 Load") and pick != "—":
+            for _k, _v in saved[pick].items():
+                if _k in _DEFAULTS:
+                    st.session_state[_k] = _v
+            st.rerun()
+    universe_name = st.selectbox("Universe", ["sp500_sample"])
+    preset = st.selectbox("Preset thesis", PRESET_NAMES, key="preset")
+    pe_max = st.slider("Max P/E", 5, 80, key="pe_max")
+    eps_growth_min = st.slider("Min earnings growth", -0.20, 0.50, step=0.01, key="eps_growth_min")
+    near_high_pct = st.slider("Within % of 52w high", 0.01, 0.30, step=0.01, key="near_high_pct")
+    top_k = st.slider("Top K", 5, 50, key="top_k")
+    use_llm = st.toggle("Include LLM 'why' (uses API)", value=False)
+    run = st.button("Run screen", type="primary", use_container_width=True)
+    st.divider()
     new_name = st.text_input("Save current screen as")
     if st.button("💾 Save screen") and new_name:
-        save_screen(new_name, {"preset": preset, "pe_max": pe_max,
-                               "eps_growth_min": eps_growth_min,
-                               "near_high_pct": near_high_pct, "top_k": top_k}, SCREENS_PATH)
+        save_screen(new_name, {k: st.session_state[k] for k in _DEFAULTS}, SCREENS_PATH)
         st.success(f"Saved '{new_name}'")
 
 if run or "result" not in st.session_state:
@@ -59,7 +65,7 @@ if run or "result" not in st.session_state:
             from hub.explain import explain_top
             from hub.data.filings import FilingProvider
             from hub.data.kvcache import KVCache
-            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings"))
+            fp = FilingProvider(kv=KVCache(cfg.cache_dir + "_filings", ttl_hours=24 * 30))
             result = explain_top(result, _provider(), anthropic.Anthropic(), cfg, filing_provider=fp)
         st.session_state["result"] = result
 
