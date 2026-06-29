@@ -1,5 +1,5 @@
 from .criteria import Criterion, CritResult, _clamp01, near_52w_high, \
-    momentum_12_1_positive, above_sma, rsi_between
+    momentum_12_1_positive, above_sma, rsi_between, rvol_above, short_momentum_positive
 
 def _fund(name, key, op, threshold, hard=True, scale=None) -> Criterion:
     def fn(price, fund):
@@ -41,6 +41,8 @@ PRESETS = {
               growth_above("revenue_growth", 0.0), mktcap_above(2e9)],
     "quality_momentum": [above_sma(200), rsi_between(50, 70),
                          margin_above("net_margin", 0.15), growth_above("earnings_growth", 0.0)],
+    "momentum_catalyst": [rvol_above(1.5, hard=False), near_52w_high(0.12),
+                          above_sma(50), short_momentum_positive(20)],
 }
 
 def get_preset(name: str):
