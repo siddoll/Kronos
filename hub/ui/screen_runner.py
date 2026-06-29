@@ -57,3 +57,20 @@ def save_screen(name, settings, path) -> dict:
     except Exception:
         pass
     return screens
+
+
+_HORIZON_LABEL = {5: "1 week", 10: "2 weeks", 20: "4 weeks"}
+
+def forward_test_table(ft: dict) -> pd.DataFrame:
+    rows = []
+    for h, m in (ft.get("horizons") or {}).items():
+        rows.append({
+            "Horizon": _HORIZON_LABEL.get(h, f"{h} bars"),
+            "Picks up %": f"{m['hit_rate'] * 100:.1f}%",
+            "Avg pick": f"{m['pick_return'] * 100:+.2f}%",
+            "Avg market": f"{m['market_return'] * 100:+.2f}%",
+            "Edge": f"{m['edge'] * 100:+.2f}%",
+            "n": m["n"],
+        })
+    return pd.DataFrame(rows, columns=["Horizon", "Picks up %", "Avg pick",
+                                       "Avg market", "Edge", "n"])

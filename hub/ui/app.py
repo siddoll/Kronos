@@ -5,7 +5,8 @@ from hub.config import HubConfig
 from hub.universe import load_universe
 from hub.data.provider import get_default_provider
 from hub.screen.screener import run_screen
-from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES, load_screens, save_screen
+from hub.screen.forward_test import forward_test
+from hub.ui.screen_runner import build_criteria, screen_to_table, PRESET_NAMES, load_screens, save_screen, forward_test_table
 
 SCREENS_PATH = os.path.join(os.path.expanduser("~"), ".hub_screens.json")
 
@@ -26,6 +27,22 @@ def _run(universe_name, preset, pe_max, eps_growth_min, near_high_pct, top_k):
     criteria = build_criteria(preset, {"pe_max": pe_max, "eps_growth_min": eps_growth_min,
                                        "near_high_pct": near_high_pct})
     return run_screen(universe, _provider(), criteria, top_k=top_k)
+
+@st.cache_data(show_spinner=False)
+def _forward(universe_name, preset, pe_max, eps_growth_min, near_high_pct):
+    universe = load_universe(universe_name)
+    provider = _provider()
+    frames = {}
+    for s in universe:
+        try:
+            f = provider.get_ohlcv(s, 400)
+            if f is not None and len(f) > 280:
+                frames[s] = f
+        except Exception:
+            pass
+    criteria = build_criteria(preset, {"pe_max": pe_max, "eps_growth_min": eps_growth_min,
+                                       "near_high_pct": near_high_pct})
+    return forward_test(frames, criteria, horizons=(5, 10, 20))
 
 # Seed control state once so a loaded screen can pre-fill the widgets (set before they render).
 _DEFAULTS = {"preset": PRESET_NAMES[0], "pe_max": 40, "eps_growth_min": 0.10,
@@ -113,3 +130,20 @@ else:
             st.write(expl.get("note"))
             if expl.get("risk_flags"):
                 st.caption("Risks: " + ", ".join(expl["risk_flags"]))
+    with st.expander("⚖️ Reality check — how reliable is this screen? (honest backtest)"):
+        st.caption("These picks show strength NOW — this is **not** a prediction that they "
+                   "will rise. Below: how this screen's price filters actually performed "
+                   "historically (point-in-time, no lookahead).")
+        ft = _forward(universe_name, preset, pe_max, eps_growth_min, near_high_pct)
+        if ft["n_dates"] == 0 or not any(v["n"] for v in ft["horizons"].values()):
+            st.info("Not enough history to backtest this screen.")
+        else:
+            st.dataframe(forward_test_table(ft), use_container_width=True, hide_index=True)
+            e20 = ft["horizons"].get(20, {})
+            hr = e20.get("hit_rate", 0) * 100
+            edge = e20.get("edge", 0) * 100
+            verdict = ("essentially a coin flip — no reliable edge"
+                       if abs(edge) < 0.3 or 47 <= hr <= 53 else
+                       f"a small historical edge of {edge:+.2f}% (treat with skepticism)")
+            st.markdown(f"**At 4 weeks: picks rose {hr:.0f}% of the time → {verdict}.** "
+                        "Use this as a starting point for your own research, not a buy signal.")
