@@ -103,3 +103,24 @@ def adx_above(n=25, hard=True) -> Criterion:
             return _FAIL()
         return CritResult(v >= n, _clamp01(v / 50.0), v)
     return Criterion(f"adx_above{n}", "technical", hard, fn)
+
+def rvol_above(mult=1.5, window=20, hard=False) -> Criterion:
+    def fn(price, fund):
+        v = price["volume"]
+        if len(v) < window + 1:
+            return _FAIL()
+        avg = float(v.iloc[-(window + 1):-1].mean())
+        if avg <= 0:
+            return _FAIL()
+        ratio = float(v.iloc[-1]) / avg
+        return CritResult(ratio >= mult, _clamp01((ratio - 1.0) / 2.0), ratio)
+    return Criterion("rvol_above", "technical", hard, fn)
+
+def short_momentum_positive(window=20, hard=True) -> Criterion:
+    def fn(price, fund):
+        c = price["close"]
+        if len(c) < window + 1:
+            return _FAIL()
+        r = float(c.iloc[-1] / c.iloc[-(window + 1)] - 1.0)
+        return CritResult(r > 0, _clamp01(r / 0.20), r)
+    return Criterion("short_momentum", "technical", hard, fn)
